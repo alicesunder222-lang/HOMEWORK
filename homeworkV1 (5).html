@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Homework V1 - LIVE ทุกคนเห็นพร้อมกัน</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{font-family:'IBM Plex Sans Thai',system-ui}
+body{background:#0A1931;background-image:radial-gradient(at 20% 10%, rgba(255,201,71,.18) 0%, transparent 55%),radial-gradient(at 90% 80%, rgba(255,201,71,.10) 0%, transparent 45%),linear-gradient(rgba(255,255,255,.04) 1px, transparent 1px),linear-gradient(90deg, rgba(255,255,255,.04) 1px, transparent 1px);background-size:100% 100%,100% 100%,42px 42px,42px 42px}
+@keyframes floatUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pulseDot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.85)}}
+.anim-in{animation:floatUp .5s both}
+.btn-yellow{background:#FFC947;color:#0A1931;font-weight:600}
+.card-white{background:#F8F6F0;box-shadow:0 18px 60px rgba(0,0,0,.45)}
+.card-navy{background:linear-gradient(180deg,#152E5A 0%,#0A1931 100%);border:1px solid rgba(255,201,71,.18)}
+.live-dot{width:8px;height:8px;background:#22c55e;border-radius:999px;animation:pulseDot 1.5s infinite}
+.live-dot-red{width:8px;height:8px;background:#ef4444;border-radius:999px;animation:pulseDot 1.5s infinite}
+</style>
+</head>
+<body class="min-h-screen text-white">
+<div id="root"></div>
+<script type="module">
+import React,{useState,useEffect} from 'https://esm.sh/react@18.3.1';
+import ReactDOM from 'https://esm.sh/react-dom@18.3.1/client';
+import { initializeApp, getApps, getApp } from 'https://esm.sh/firebase@10.12.2/app';
+import { getDatabase, ref, onValue, push, set, update, remove } from 'https://esm.sh/firebase@10.12.2/database';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAqPyy9CfBZeQHA2eWcPQ9W3pEeMnn1JPw",
+  authDomain: "homework-5e6f4.firebaseapp.com",
+  databaseURL: "https://homework-5e6f4-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "homework-5e6f4",
+  storageBucket: "homework-5e6f4.firebasestorage.app",
+  messagingSenderId: "334918337660",
+  appId: "1:334918337660:web:b05751f31ec281fdf775f9",
+  measurementId: "G-BG8P7G95YV"
+};
+
+let app, db;
+try{
+  app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+  db = getDatabase(app);
+  console.log('Firebase OK:', firebaseConfig.databaseURL);
+}catch(e){
+  console.error('Firebase init error', e);
+  alert('Firebase init error: '+e.message);
+}
+
+const ADMIN_PWD='admin123';
+
+function App(){
+ const [role,setRole]=useState('login');
+ const [items,setItems]=useState([]);
+ const [loading,setLoading]=useState(true);
+ const [isLive,setIsLive]=useState(false);
+ const [showAdd,setShowAdd]=useState(false);
+ const [editId,setEditId]=useState(null);
+ const [form,setForm]=useState({subject:'',title:'',desc:'',due:''});
+ const [adminInput,setAdminInput]=useState('');
+
+ useEffect(()=>{
+  if(db){
+    const hwRef=ref(db,'homeworks');
+    console.log('Listening', hwRef.toString());
+    const unsub=onValue(hwRef, (snap)=>{
+      const val=snap.val();
+      console.log('Data', val);
+      if(val){
+        const arr=Object.keys(val).map(k=>({id:k, ...val[k]})).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+        setItems(arr);
+      }else setItems([]);
+      setLoading(false);
+      setIsLive(true);
+    }, (err)=>{
+      console.error(err);
+      setIsLive(false);
+      setLoading(false);
+      alert('อ่านไม่ได้: '+err.message+' - เช็ค Rules เป็น true และ Publish แล้วหรือยัง');
+    });
+    return ()=>unsub();
+  }else{
+    setLoading(false);
+    setIsLive(false);
+  }
+ },[]);
+
+ const save=async()=>{
+  if(!form.subject||!form.title||!form.due){alert('กรอกให้ครบ');return;}
+  if(!db){
+    alert('Firebase ยังไม่เชื่อม - db เป็น null\n\nสาเหตุ: เปิดไฟล์แบบ file:// หรือ Firebase config ผิด\n\nวิธีแก้:\n1. ต้องอัปโหลดขึ้น GitHub Pages (https://) เท่านั้น อย่าเปิดแบบ file://\n2. เช็ค databaseURL ว่าตรงกับใน Firebase Console');
+    console.error('db is null, cannot save');
+    return;
+  }
+  try{
+    if(editId){
+      await update(ref(db,'homeworks/'+editId), {...form, updatedAt: Date.now()});
+    }else{
+      const newRef=push(ref(db,'homeworks'));
+      await set(newRef, {...form, createdAt: Date.now()});
+      console.log('Saved', newRef.key);
+    }
+    setForm({subject:'',title:'',desc:'',due:''}); setShowAdd(false); setEditId(null);
+  }catch(e){
+    console.error(e);
+    alert('บันทึกไม่ได้: '+e.code+' '+e.message+'\n\nถ้าขึ้น Permission denied = Rules ยังเป็น false ต้องไปแก้เป็น true แล้วกด Publish');
+  }
+ };
+ const del=async(id)=>{
+  if(!confirm('ลบ? ทุกคนจะเห็นว่าลบแล้ว')) return;
+  await remove(ref(db,'homeworks/'+id));
+ };
+
+ if(role==='login'){
+  return React.createElement('div',{className:'min-h-screen flex items-center justify-center p-4'},
+   React.createElement('div',{className:'w-full max-w-[780px] space-y-6 anim-in'},
+    React.createElement('div',{className:'text-center space-y-3'},
+     React.createElement('div',{className:`inline-flex items-center gap-2 px-4 py-1.5 rounded-full border text-[11px] font-bold ${isLive?'bg-green-500/15 border-green-500/30 text-green-300':'bg-red-500/15 border-red-500/30 text-red-300'}`},
+      React.createElement('span',{className: isLive?'live-dot':'live-dot-red'}), 
+      isLive?`● สีเขียว LIVE • เชื่อมต่อแล้ว • ${items.length} งาน`:`● สีแดง ยังไม่เชื่อมต่อ • ${loading?'กำลังเชื่อม...':'เชื่อมไม่ได้'}`
+     ),
+     React.createElement('h1',{className:'text-[30px] font-bold leading-none'},'ระบบจัดการ',React.createElement('br'),React.createElement('span',{className:'text-[#FFC947]'},'การบ้าน')),
+     React.createElement('p',{className:'text-[11px] text-white/40'}, isLive?'สีเขียว = เชื่อมสำเร็จ ทุกคนเห็นข้อมูลเดียวกัน':'สีแดง = ยังไม่เชื่อม ให้เช็ค Rules เป็น true + เปิดผ่าน https://')
+    ),
+    React.createElement('div',{className:'grid md:grid-cols-2 gap-4'},
+     React.createElement('div',{className:'card-white rounded-[20px] p-6 text-[#0A1931]'},
+      React.createElement('h3',{className:'font-bold'},'นักเรียน'),
+      React.createElement('p',{className:'text-[11px] opacity-60 mt-1'},'ดูการบ้านแบบ Realtime'),
+      React.createElement('button',{onClick:()=>setRole('viewer'),className:'w-full mt-5 h-11 rounded-full border border-[#0A1931] font-semibold'},'เข้าสู่ระบบ →')
+     ),
+     React.createElement('div',{className:'card-navy rounded-[20px] p-6'},
+      React.createElement('h3',{className:'font-bold'},'แอดมิน'),
+      React.createElement('input',{type:'password',placeholder:'admin123',value:adminInput,onChange:e=>setAdminInput(e.target.value),onKeyDown:e=>{if(e.key==='Enter'&&adminInput===ADMIN_PWD) setRole('admin')}, className:'w-full mt-4 h-11 rounded-full px-4 text-[13px] text-[#0A1931] outline-none'}),
+      React.createElement('button',{onClick:()=>{if(adminInput===ADMIN_PWD) setRole('admin'); else alert('รหัสไม่ถูก')},className:'w-full mt-3 h-11 rounded-full btn-yellow'},'✦ เข้าสู่ระบบแอดมิน')
+     )
+    )
+   )
+  );
+ }
+
+ return React.createElement('div',{className:'max-w-[900px] mx-auto p-4 md:p-6 space-y-4'},
+  React.createElement('div',{className:'flex justify-between items-center'},
+   React.createElement('div',{className:'flex items-center gap-3'},
+    React.createElement('div',{className:'w-9 h-9 rounded-full bg-[#FFC947] text-[#0A1931] font-bold flex items-center justify-center'},'H'),
+    React.createElement('div',null,
+     React.createElement('h1',{className:'font-bold flex items-center gap-2'},'การบ้าน',
+      React.createElement('span',{className:`text-[10px] px-3 py-1 rounded-full border flex items-center gap-1.5 font-bold ${isLive?'bg-green-500/20 text-green-300 border-green-500/40':'bg-red-500/20 text-red-300 border-red-500/40'}`},
+       React.createElement('span',{className: isLive?'live-dot':'live-dot-red'}), isLive?'สีเขียว LIVE':'สีแดง ไม่เชื่อม'
+      )
+     ),
+     React.createElement('p',{className:'text-[10px] text-white/40'}, isLive?`เชื่อมแล้ว ทุกคนเห็น ${items.length} งาน`:'ยังไม่เชื่อม')
+    )
+   ),
+   React.createElement('div',{className:'flex gap-2'},
+    React.createElement('button',{onClick:()=>setRole('login'),className:'px-4 py-2 rounded-full bg-white/10 text-xs'},'ออก'),
+    role==='admin'?React.createElement('button',{onClick:()=>{setEditId(null);setForm({subject:'',title:'',desc:'',due:''});setShowAdd(true);},className:'px-5 py-2 rounded-full btn-yellow text-xs'},'+ เพิ่ม'):null
+   )
+  ),
+  loading?React.createElement('div',{className:'py-20 text-center'},
+    React.createElement('div',{className:'w-8 h-8 border-2 border-[#FFC947]/30 border-t-[#FFC947] rounded-full animate-spin mx-auto'}),
+    React.createElement('p',{className:'text-xs text-white/40 mt-3'},'กำลังเชื่อม Firebase...')
+  ):
+  items.length===0?React.createElement('div',{className:'text-center py-16 card-white rounded-[20px] text-[#0A1931]'},
+    React.createElement('p',{className:'font-bold'}, isLive?'ยังไม่มีการบ้าน':'ยังไม่เชื่อมต่อ Firebase'),
+    React.createElement('p',{className:'text-[12px] opacity-60 mt-1'}, isLive?'กด + เพิ่ม แล้วทุกคนจะเห็นพร้อมกัน':'ถ้าเป็นสีแดง ให้เช็ค Rules = true และ Publish'),
+    role==='admin'&&isLive?React.createElement('button',{onClick:()=>setShowAdd(true),className:'mt-4 px-6 py-2 rounded-full bg-[#0A1931] text-white text-xs'},'+ เพิ่มการบ้านแรก'):null
+  ):
+  React.createElement('div',{className:'grid md:grid-cols-2 gap-3'},
+   items.map((hw,i)=>React.createElement('div',{key:hw.id,className:'card-white rounded-[18px] p-5 text-[#0A1931] anim-in', style:{animationDelay:`${i*0.05}s`}},
+    React.createElement('div',{className:'flex justify-between'},
+     React.createElement('span',{className:'text-[11px] px-2.5 py-1 rounded-full bg-[#0A1931] text-white'},hw.subject),
+     React.createElement('span',{className:'text-[11px] opacity-50'}, hw.due?new Date(hw.due).toLocaleDateString('th-TH'):'-')
+    ),
+    React.createElement('h3',{className:'font-semibold mt-3'},hw.title),
+    React.createElement('p',{className:'text-[12px] opacity-60 mt-1'},hw.desc),
+    role==='admin'?React.createElement('div',{className:'flex gap-2 mt-4'},
+     React.createElement('button',{onClick:()=>{setForm({subject:hw.subject,title:hw.title,desc:hw.desc,due:hw.due});setEditId(hw.id);setShowAdd(true);},className:'px-4 py-1.5 rounded-full bg-[#0A1931] text-white text-xs'},'แก้ไข'),
+     React.createElement('button',{onClick:()=>del(hw.id),className:'px-4 py-1.5 rounded-full border text-xs text-red-600'},'ลบ')
+    ):null
+   ))
+  ),
+  showAdd?React.createElement('div',{className:'fixed inset-0 bg-[#0A1931]/80 backdrop-blur-[12px] flex items-center justify-center p-4 z-50'},
+   React.createElement('div',{className:'w-full max-w-md bg-[#F8F6F0] rounded-[24px] p-6 space-y-3 text-[#0A1931] anim-in'},
+    React.createElement('div',{className:'flex justify-between items-center'},
+     React.createElement('h3',{className:'font-bold'},editId?'แก้ไข':'เพิ่มการบ้านใหม่'),
+     React.createElement('span',{className:`text-[10px] px-3 py-1 rounded-full font-bold flex items-center gap-1.5 ${isLive?'bg-green-100 text-green-700':'bg-red-100 text-red-700'}`},
+      React.createElement('span',{className: isLive?'live-dot':'live-dot-red'}), isLive?'สีเขียว LIVE':'สีแดง'
+     )
+    ),
+    React.createElement('input',{placeholder:'วิชา',value:form.subject,onChange:e=>setForm({...form,subject:e.target.value}),className:'w-full p-3 rounded-xl bg-black/[0.05] border text-sm'}),
+    React.createElement('input',{placeholder:'ชื่องาน',value:form.title,onChange:e=>setForm({...form,title:e.target.value}),className:'w-full p-3 rounded-xl bg-black/[0.05] border text-sm'}),
+    React.createElement('textarea',{placeholder:'รายละเอียด',value:form.desc,onChange:e=>setForm({...form,desc:e.target.value}),className:'w-full p-3 rounded-xl bg-black/[0.05] border text-sm'}),
+    React.createElement('input',{type:'date',value:form.due,onChange:e=>setForm({...form,due:e.target.value}),className:'w-full p-3 rounded-xl bg-black/[0.05] border text-sm'}),
+    React.createElement('div',{className:'flex gap-2'},
+     React.createElement('button',{onClick:save,className:'flex-1 h-11 rounded-full bg-[#0A1931] text-white text-sm'},'บันทึก ทุกคนเห็นทันที'),
+     React.createElement('button',{onClick:()=>setShowAdd(false),className:'px-6 h-11 rounded-full border text-sm'},'ปิด')
+    )
+   )
+  ):null
+ );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));
+</script>
+</body>
+</html>
