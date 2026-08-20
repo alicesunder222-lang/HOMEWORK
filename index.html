@@ -45,7 +45,6 @@ try{
   console.log('Firebase OK:', firebaseConfig.databaseURL);
 }catch(e){
   console.error('Firebase init error', e);
-  alert('Firebase init error: '+e.message);
 }
 
 const ADMIN_PWD='admin123';
@@ -63,10 +62,8 @@ function App(){
  useEffect(()=>{
   if(db){
     const hwRef=ref(db,'homeworks');
-    console.log('Listening', hwRef.toString());
     const unsub=onValue(hwRef, (snap)=>{
       const val=snap.val();
-      console.log('Data', val);
       if(val){
         const arr=Object.keys(val).map(k=>({id:k, ...val[k]})).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
         setItems(arr);
@@ -77,34 +74,24 @@ function App(){
       console.error(err);
       setIsLive(false);
       setLoading(false);
-      alert('อ่านไม่ได้: '+err.message+' - เช็ค Rules เป็น true และ Publish แล้วหรือยัง');
     });
     return ()=>unsub();
-  }else{
-    setLoading(false);
-    setIsLive(false);
   }
  },[]);
 
  const save=async()=>{
   if(!form.subject||!form.title||!form.due){alert('กรอกให้ครบ');return;}
-  if(!db){
-    alert('Firebase ยังไม่เชื่อม - db เป็น null\n\nสาเหตุ: เปิดไฟล์แบบ file:// หรือ Firebase config ผิด\n\nวิธีแก้:\n1. ต้องอัปโหลดขึ้น GitHub Pages (https://) เท่านั้น อย่าเปิดแบบ file://\n2. เช็ค databaseURL ว่าตรงกับใน Firebase Console');
-    console.error('db is null, cannot save');
-    return;
-  }
+  if(!db){ alert('Firebase ยังไม่เชื่อม - เปิดผ่าน https:// เท่านั้น อย่าเปิดแบบ file://'); return; }
   try{
     if(editId){
       await update(ref(db,'homeworks/'+editId), {...form, updatedAt: Date.now()});
     }else{
       const newRef=push(ref(db,'homeworks'));
       await set(newRef, {...form, createdAt: Date.now()});
-      console.log('Saved', newRef.key);
     }
     setForm({subject:'',title:'',desc:'',due:''}); setShowAdd(false); setEditId(null);
   }catch(e){
-    console.error(e);
-    alert('บันทึกไม่ได้: '+e.code+' '+e.message+'\n\nถ้าขึ้น Permission denied = Rules ยังเป็น false ต้องไปแก้เป็น true แล้วกด Publish');
+    alert('บันทึกไม่ได้: '+e.message+'\nเช็ค Rules เป็น true และ Publish แล้วหรือยัง');
   }
  };
  const del=async(id)=>{
@@ -118,15 +105,15 @@ function App(){
     React.createElement('div',{className:'text-center space-y-3'},
      React.createElement('div',{className:`inline-flex items-center gap-2 px-4 py-1.5 rounded-full border text-[11px] font-bold ${isLive?'bg-green-500/15 border-green-500/30 text-green-300':'bg-red-500/15 border-red-500/30 text-red-300'}`},
       React.createElement('span',{className: isLive?'live-dot':'live-dot-red'}), 
-      isLive?`● สีเขียว LIVE • เชื่อมต่อแล้ว • ${items.length} งาน`:`● สีแดง ยังไม่เชื่อมต่อ • ${loading?'กำลังเชื่อม...':'เชื่อมไม่ได้'}`
+      isLive?`● สีเขียว LIVE • เชื่อมต่อแล้ว • ${items.length} งาน`:`● สีแดง ยังไม่เชื่อม • ${loading?'กำลังเชื่อม...':'เชื่อมไม่ได้'}`
      ),
      React.createElement('h1',{className:'text-[30px] font-bold leading-none'},'ระบบจัดการ',React.createElement('br'),React.createElement('span',{className:'text-[#FFC947]'},'การบ้าน')),
-     React.createElement('p',{className:'text-[11px] text-white/40'}, isLive?'สีเขียว = เชื่อมสำเร็จ ทุกคนเห็นข้อมูลเดียวกัน':'สีแดง = ยังไม่เชื่อม ให้เช็ค Rules เป็น true + เปิดผ่าน https://')
+     React.createElement('p',{className:'text-[11px] text-white/40'}, isLive?'สีเขียว = เชื่อมสำเร็จ ทุกคนเห็นข้อมูลเดียวกัน':'สีแดง = ยังไม่เชื่อม')
     ),
     React.createElement('div',{className:'grid md:grid-cols-2 gap-4'},
      React.createElement('div',{className:'card-white rounded-[20px] p-6 text-[#0A1931]'},
       React.createElement('h3',{className:'font-bold'},'นักเรียน'),
-      React.createElement('p',{className:'text-[11px] opacity-60 mt-1'},'ดูการบ้านแบบ Realtime'),
+      React.createElement('p',{className:'text-[11px] opacity-60 mt-1'},'ดูการบ้านแบบ Realtime ทุกคนเห็นเหมือนกัน'),
       React.createElement('button',{onClick:()=>setRole('viewer'),className:'w-full mt-5 h-11 rounded-full border border-[#0A1931] font-semibold'},'เข้าสู่ระบบ →')
      ),
      React.createElement('div',{className:'card-navy rounded-[20px] p-6'},
@@ -162,7 +149,7 @@ function App(){
     React.createElement('p',{className:'text-xs text-white/40 mt-3'},'กำลังเชื่อม Firebase...')
   ):
   items.length===0?React.createElement('div',{className:'text-center py-16 card-white rounded-[20px] text-[#0A1931]'},
-    React.createElement('p',{className:'font-bold'}, isLive?'ยังไม่มีการบ้าน':'ยังไม่เชื่อมต่อ Firebase'),
+    React.createElement('p',{className:'font-bold'}, isLive?'ยังไม่มีการบ้าน':'ยังไม่เชื่อมต่อ'),
     React.createElement('p',{className:'text-[12px] opacity-60 mt-1'}, isLive?'กด + เพิ่ม แล้วทุกคนจะเห็นพร้อมกัน':'ถ้าเป็นสีแดง ให้เช็ค Rules = true และ Publish'),
     role==='admin'&&isLive?React.createElement('button',{onClick:()=>setShowAdd(true),className:'mt-4 px-6 py-2 rounded-full bg-[#0A1931] text-white text-xs'},'+ เพิ่มการบ้านแรก'):null
   ):
